@@ -1,19 +1,7 @@
 import React from 'react'
 import { motion } from 'framer-motion'
-import { ExternalLink, LucideIcon } from 'lucide-react'
-
-interface AIAgentCardProps {
-  agent: {
-    name: string
-    description: string
-    price: number
-    rating: number
-    icon: LucideIcon
-    category: string
-  }
-  index: number
-  onExecute: (name: string, price: number) => void
-}
+import { ExternalLink } from 'lucide-react'
+import type { AIAgentCardProps } from '../../types'
 
 export const AIAgentCard: React.FC<AIAgentCardProps> = ({ agent, index, onExecute }) => {
   return (

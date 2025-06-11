@@ -28,18 +28,10 @@ import { ALLOWED_COLLECTIONS } from '../constants/collections'
 import { getAccessLevel } from '../utils/access'
 
 export default function HomePage() {
-  // Безопасная инициализация TON Connect хуков
-  let connectionRestored = true
-  let wallet = null
-  let userFriendlyAddress = null
-
-  try {
-    connectionRestored = useIsConnectionRestored()
-    wallet = useTonWallet()
-    userFriendlyAddress = useTonAddress()
-  } catch (error) {
-    console.warn('TON Connect not available:', error)
-  }
+  // ✅ ИСПРАВЛЕНО: Правильное использование хуков на верхнем уровне
+  const connectionRestored = useIsConnectionRestored()
+  const wallet = useTonWallet()
+  const userFriendlyAddress = useTonAddress()
   
   const { user, hapticFeedback, isInTelegram } = useTelegram()
   

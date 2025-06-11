@@ -1,14 +1,11 @@
 import { useState, useEffect, useCallback } from 'react'
 import toast from 'react-hot-toast'
+import { CONFIG } from '../constants/config'
+import type { UseNFTAccessProps, UseNFTAccessReturn, NFT, NFTAccessData } from '../types'
 
-interface UseNFTAccessProps {
-  userFriendlyAddress: string | null
-  hapticFeedback: any
-}
-
-export const useNFTAccess = ({ userFriendlyAddress, hapticFeedback }: UseNFTAccessProps) => {
+export const useNFTAccess = ({ userFriendlyAddress, hapticFeedback }: UseNFTAccessProps): UseNFTAccessReturn => {
   const [hasNFTAccess, setHasNFTAccess] = useState(false)
-  const [userNFTs, setUserNFTs] = useState<any[]>([])
+  const [userNFTs, setUserNFTs] = useState<NFT[]>([])
   const [isCheckingNFTs, setIsCheckingNFTs] = useState(false)
 
   const checkNFTAccess = useCallback(async () => {
@@ -16,7 +13,7 @@ export const useNFTAccess = ({ userFriendlyAddress, hapticFeedback }: UseNFTAcce
 
     setIsCheckingNFTs(true)
     try {
-      const response = await fetch('http://localhost:8000/api/v1/wallet/check-nft', {
+      const response = await fetch(`${CONFIG.API_URL}/api/v1/wallet/check-nft`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ wallet_address: userFriendlyAddress })
@@ -26,13 +23,13 @@ export const useNFTAccess = ({ userFriendlyAddress, hapticFeedback }: UseNFTAcce
         throw new Error(`HTTP error! status: ${response.status}`)
       }
       
-      const nftData = await response.json()
+      const nftData: NFTAccessData = await response.json()
       
       setUserNFTs(nftData.nfts || [])
       setHasNFTAccess(nftData.has_access || false)
       
       if (nftData.has_access) {
-        hapticFeedback.notification('success')
+        hapticFeedback?.notification('success')
         toast.success(`🎉 NFT доступ подтвержден! Уровень: ${nftData.access_level}`)
       } else {
         toast.error('❌ NFT не найдены в разрешенных коллекциях')
@@ -46,39 +43,40 @@ export const useNFTAccess = ({ userFriendlyAddress, hapticFeedback }: UseNFTAcce
     }
   }, [userFriendlyAddress, hapticFeedback])
 
-  const handleNFTError = (error: any) => {
+  const handleNFTError = useCallback((error: any) => {
     if (error instanceof TypeError && error.message.includes('NetworkError')) {
       toast.error('Сервер недоступен. Проверьте подключение.')
     } else {
       toast.error('Ошибка проверки NFT коллекций')
     }
     
-    hapticFeedback.notification('error')
+    hapticFeedback?.notification('error')
     
     // Fallback к демо режиму
-    const mockNFTs = [{
+    const mockNFTs: NFT[] = [{
       collection: 'demo',
       tokenId: '1',
       name: 'NeuroNest Access Pass #1 (Demo)',
       image: 'https://via.placeholder.com/300x300/00FFFF/000000?text=NEURONEST',
-      verified: true
+      verified: true,
+      description: 'Demo NFT for development'
     }]
     
     setUserNFTs(mockNFTs)
     setHasNFTAccess(true)
     toast.success('🔄 Демо режим активирован')
-  }
+  }, [hapticFeedback])
 
-  // Автоматическая проверка NFT при изменении адреса
+  // ✅ ИСПРАВЛЕНО: Правильные зависимости и очистка таймера
   useEffect(() => {
     if (userFriendlyAddress && !isCheckingNFTs) {
       const timer = setTimeout(() => {
         checkNFTAccess()
-      }, 1000)
+      }, CONFIG.NFT_CHECK_DELAY)
       
       return () => clearTimeout(timer)
     }
-  }, [userFriendlyAddress, checkNFTAccess])
+  }, [userFriendlyAddress, isCheckingNFTs, checkNFTAccess])
 
   return {
     hasNFTAccess,

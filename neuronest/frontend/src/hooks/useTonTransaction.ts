@@ -1,8 +1,10 @@
 import { useState } from 'react'
 import { useTonConnectUI } from '@tonconnect/ui-react'
 import toast from 'react-hot-toast'
+import { CONFIG } from '../constants/config'
+import type { HapticFeedback, UseTonTransactionReturn } from '../types'
 
-export const useTonTransaction = (hapticFeedback: any) => {
+export const useTonTransaction = (hapticFeedback: HapticFeedback | null): UseTonTransactionReturn => {
   const [tonConnectUI] = useTonConnectUI()
   const [isProcessing, setIsProcessing] = useState(false)
 
@@ -14,17 +16,18 @@ export const useTonTransaction = (hapticFeedback: any) => {
 
     setIsProcessing(true)
     try {
-      hapticFeedback.impact('medium')
+      hapticFeedback?.impact('medium')
       
       const transaction = {
-        validUntil: Math.floor(Date.now() / 1000) + 60,
+        validUntil: Math.floor(Date.now() / 1000) + CONFIG.TRANSACTION_TIMEOUT,
         messages: [{
-          address: "EQBfbkxNqgzQQm_GqL4zQGLm2N6_r-5rG_3k4l__NF8qf",
-          amount: (price * 1000000000).toString(),
+          address: CONFIG.PAYMENT_ADDRESS,
+          amount: (price * 1000000000).toString(), // Convert TON to nanotons
           payload: btoa(JSON.stringify({
             type: 'agent_execution',
             agent: agentName,
-            user: userId || 'anonymous'
+            user: userId || 'anonymous',
+            timestamp: Date.now()
           }))
         }]
       }
@@ -34,7 +37,7 @@ export const useTonTransaction = (hapticFeedback: any) => {
       const result = await tonConnectUI.sendTransaction(transaction)
       
       toast.success(`✅ Агент ${agentName} запущен!`, { id: 'tx' })
-      hapticFeedback.notification('success')
+      hapticFeedback?.notification('success')
       
       return result
       
@@ -51,11 +54,15 @@ export const useTonTransaction = (hapticFeedback: any) => {
     
     if (error?.name === 'TonConnectError' || error?.message?.includes('User rejected')) {
       toast.error('Транзакция отменена пользователем', { id: 'tx' })
+    } else if (error?.message?.includes('Insufficient funds')) {
+      toast.error('Недостаточно средств для выполнения транзакции', { id: 'tx' })
+    } else if (error?.message?.includes('Network')) {
+      toast.error('Ошибка сети. Проверьте подключение к интернету', { id: 'tx' })
     } else {
       toast.error('Ошибка выполнения транзакции', { id: 'tx' })
     }
     
-    hapticFeedback.notification('error')
+    hapticFeedback?.notification('error')
   }
 
   return { executeAgent, isProcessing }

@@ -2,13 +2,8 @@ import React from 'react'
 import { motion } from 'framer-motion'
 import { Wallet, Shield } from 'lucide-react'
 import { TonConnectButton } from '@tonconnect/ui-react'
-
-interface WalletSectionProps {
-  wallet: any
-  userFriendlyAddress: string
-  hasNFTAccess: boolean
-  getAccessLevel: () => string
-}
+import { formatAddress } from '../../utils/access'
+import type { WalletSectionProps } from '../../types'
 
 export const WalletSection: React.FC<WalletSectionProps> = ({
   wallet,
@@ -16,11 +11,6 @@ export const WalletSection: React.FC<WalletSectionProps> = ({
   hasNFTAccess,
   getAccessLevel
 }) => {
-  const formatAddress = (address: string) => {
-    if (!address) return ''
-    return `${address.slice(0, 6)}...${address.slice(-6)}`
-  }
-
   return (
     <div className="flex items-center space-x-4">
       {wallet && (
