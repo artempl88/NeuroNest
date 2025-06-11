@@ -23,12 +23,12 @@ export const useTonTransaction = (hapticFeedback: HapticFeedback | null): UseTon
         messages: [{
           address: CONFIG.PAYMENT_ADDRESS,
           amount: (price * 1000000000).toString(), // Convert TON to nanotons
-          payload: btoa(JSON.stringify({
+          payload: btoa(unescape(encodeURIComponent(JSON.stringify({
             type: 'agent_execution',
             agent: agentName,
             user: userId || 'anonymous',
             timestamp: Date.now()
-          }))
+          }))))
         }]
       }
 

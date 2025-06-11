@@ -3,6 +3,7 @@ import type { Metadata } from 'next'
 import { Inter } from 'next/font/google'
 import './globals.css'
 import { TonConnectProvider } from '../components/providers/TonConnectProvider'
+import { ErrorBoundary } from '../components/ErrorBoundary'
 
 const inter = Inter({ subsets: ['latin'] })
 
@@ -26,12 +27,13 @@ export default function RootLayout({
     <html lang="ru">
       <head>
         <script src="https://telegram.org/js/telegram-web-app.js" defer />
-        <script src="https://unpkg.com/web-animations-js@latest/web-animations.min.js" defer />
       </head>
       <body className={inter.className}>
-        <TonConnectProvider>
-          {children}
-        </TonConnectProvider>
+        <ErrorBoundary>
+          <TonConnectProvider>
+            {children}
+          </TonConnectProvider>
+        </ErrorBoundary>
       </body>
     </html>
   )

@@ -13,6 +13,9 @@ export function NeuralNetwork() {
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const nodesRef = useRef<Node[]>([])
   const animationFrameRef = useRef<number>()
+  const frameRate = 30 // FPS
+  const frameDelay = 1000 / frameRate
+  let lastFrameTime = 0
 
   useEffect(() => {
     const canvas = canvasRef.current
@@ -58,7 +61,13 @@ export function NeuralNetwork() {
 
     nodesRef.current = nodes
 
-    const animate = () => {
+    const animate = (currentTime: number) => {
+      if (currentTime - lastFrameTime < frameDelay) {
+        animationFrameRef.current = requestAnimationFrame(animate)
+        return
+      }
+      lastFrameTime = currentTime
+      
       ctx.clearRect(0, 0, canvas.width, canvas.height)
 
       // Обновление позиций узлов
@@ -131,7 +140,7 @@ export function NeuralNetwork() {
       animationFrameRef.current = requestAnimationFrame(animate)
     }
 
-    animate()
+    animate(0)
 
     return () => {
       window.removeEventListener('resize', resizeCanvas)

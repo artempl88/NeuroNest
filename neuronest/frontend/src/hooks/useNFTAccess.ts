@@ -1,6 +1,8 @@
 import { useState, useEffect, useCallback } from 'react'
 import toast from 'react-hot-toast'
 import { CONFIG } from '../constants/config'
+import { validateNFTAccessData } from '../utils/validation'
+import { isDemoMode, getDemoNFTs } from '../utils/demo'
 import type { UseNFTAccessProps, UseNFTAccessReturn, NFT, NFTAccessData } from '../types'
 
 export const useNFTAccess = ({ userFriendlyAddress, hapticFeedback }: UseNFTAccessProps): UseNFTAccessReturn => {
@@ -24,7 +26,8 @@ export const useNFTAccess = ({ userFriendlyAddress, hapticFeedback }: UseNFTAcce
         throw new Error(`HTTP error! status: ${response.status}`)
       }
       
-      const nftData: NFTAccessData = await response.json()
+      const rawData = await response.json()
+      const nftData = validateNFTAccessData(rawData)
       
       setUserNFTs(nftData.nfts || [])
       setHasNFTAccess(nftData.has_access || false)
@@ -49,44 +52,40 @@ export const useNFTAccess = ({ userFriendlyAddress, hapticFeedback }: UseNFTAcce
 
   const handleNFTError = useCallback((error: any) => {
     if (error instanceof TypeError && error.message.includes('NetworkError')) {
-      if (!hasCheckedOnce) {
-        toast.error('Сервер недоступен. Проверьте подключение.')
-      }
+      toast.error('Сервер недоступен. Проверьте подключение.')
     } else {
-      if (!hasCheckedOnce) {
-        toast.error('Ошибка проверки NFT коллекций')
-      }
+      toast.error('Ошибка проверки NFT коллекций')
     }
     
     hapticFeedback?.notification('error')
     
-    const mockNFTs: NFT[] = [{
-      collection: 'demo',
-      tokenId: '1',
-      name: 'NeuroNest Access Pass #1 (Demo)',
-      image: 'https://via.placeholder.com/300x300/00FFFF/000000?text=NEURONEST',
-      verified: true,
-      description: 'Demo NFT for development'
-    }]
-    
-    setUserNFTs(mockNFTs)
-    setHasNFTAccess(true)
-    setHasCheckedOnce(true)
-    
-    if (!hasCheckedOnce) {
+    // Включать демо только если явно указано
+    if (isDemoMode()) {
+      setUserNFTs(getDemoNFTs())
+      setHasNFTAccess(true)
       toast.success('🔄 Демо режим активирован')
     }
-  }, [hapticFeedback, hasCheckedOnce])
+    
+    setHasCheckedOnce(true)
+  }, [hapticFeedback])
 
   useEffect(() => {
-    if (userFriendlyAddress && !hasCheckedOnce && !isCheckingNFTs) {
-      const timer = setTimeout(() => {
-        checkNFTAccess()
+    let mounted = true
+    let timer: NodeJS.Timeout
+    
+    if (userFriendlyAddress && !isCheckingNFTs && !hasNFTAccess) {
+      timer = setTimeout(() => {
+        if (mounted) {
+          checkNFTAccess()
+        }
       }, CONFIG.NFT_CHECK_DELAY)
-      
-      return () => clearTimeout(timer)
     }
-  }, [userFriendlyAddress, hasCheckedOnce, isCheckingNFTs, checkNFTAccess])
+    
+    return () => {
+      mounted = false
+      if (timer) clearTimeout(timer)
+    }
+  }, [userFriendlyAddress]) // Убрал лишние зависимости
 
   useEffect(() => {
     if (!userFriendlyAddress) {

@@ -1,4 +1,5 @@
 import { LucideIcon } from 'lucide-react'
+import { Wallet } from '@tonconnect/ui-react'
 
 export interface NFT {
   collection: string
@@ -87,10 +88,10 @@ export interface TelegramWebApp {
 }
 
 export interface WalletSectionProps {
-  wallet: any
+  wallet: Wallet | null
   userFriendlyAddress: string
   hasNFTAccess: boolean
-  getAccessLevel: () => string
+  getAccessLevel: () => AccessLevel
 }
 
 export interface AIAgentCardProps {
@@ -130,4 +131,16 @@ export interface NFTAccessData {
     raw_nfts_count: number
     valid_nfts_count: number
   }
+}
+
+export interface ApiError {
+  message: string
+  code?: string
+  status?: number
+}
+
+export type TonConnectError = {
+  name: 'TonConnectError'
+  message: string
+  code?: number
 } 
