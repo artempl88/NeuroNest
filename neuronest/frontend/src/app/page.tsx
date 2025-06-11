@@ -1,75 +1,55 @@
 'use client'
 
-import React, { useEffect, useState } from 'react'
+import React, { useEffect } from 'react'
 import { motion } from 'framer-motion'
 import { 
-  Bot, 
-  Shield, 
-  Coins, 
-  Users,
-  Star,
-  TrendingUp,
-  Rocket,
-  Zap,
   Network,
   Cpu,
+  Coins,
+  Shield,
   Wallet,
-  ExternalLink
+  Cpu as CpuIcon
 } from 'lucide-react'
 import toast, { Toaster } from 'react-hot-toast'
 import { 
-  TonConnectButton, 
   useTonAddress, 
   useTonWallet, 
-  useTonConnectUI,
   useIsConnectionRestored 
 } from '@tonconnect/ui-react'
-import { NeuralNetwork, StaticNeuralNodes } from '../components/ui/NeuralNetwork'
-import { useTelegram } from '../hooks/useTelegram'
 
-// Мок данные для NFT коллекций
-const ALLOWED_COLLECTIONS = [
-  {
-    address: 'EQCGbQyAJxxMsYQWLCklkXQq4fkIBK3kz3GA1TkFJyUR9nTH',
-    name: 'NeuroNest Access Collection',
-    description: 'Официальная NFT коллекция для доступа к NeuroNest'
-  }
-]
+import { NeuralNetwork, StaticNeuralNodes } from '../components/ui/NeuralNetwork'
+import { WalletSection } from '../components/sections/WalletSection'
+import { AIAgentCard } from '../components/sections/AIAgentCard'
+import { useTelegram } from '../hooks/useTelegram'
+import { useNFTAccess } from '../hooks/useNFTAccess'
+import { useTonTransaction } from '../hooks/useTonTransaction'
+import { AI_AGENTS } from '../constants/agents'
+import { ALLOWED_COLLECTIONS } from '../constants/collections'
+import { getAccessLevel } from '../utils/access'
 
 export default function HomePage() {
   // Безопасная инициализация TON Connect хуков
   let connectionRestored = true
   let wallet = null
   let userFriendlyAddress = null
-  let tonConnectUI = null
 
   try {
     connectionRestored = useIsConnectionRestored()
     wallet = useTonWallet()
     userFriendlyAddress = useTonAddress()
-    const [tcUI] = useTonConnectUI()
-    tonConnectUI = tcUI
   } catch (error) {
     console.warn('TON Connect not available:', error)
   }
   
-  const [hasNFTAccess, setHasNFTAccess] = useState(false)
-  const [userNFTs, setUserNFTs] = useState<any[]>([])
-  const [isCheckingNFTs, setIsCheckingNFTs] = useState(false)
+  const { user, hapticFeedback, isInTelegram } = useTelegram()
   
-  const { user, hapticFeedback, showAlert, isInTelegram } = useTelegram()
-
-  // Проверка NFT при подключении кошелька
-  useEffect(() => {
-    if (wallet && userFriendlyAddress && !isCheckingNFTs) {
-      // Добавляем небольшую задержку для стабилизации подключения
-      const timer = setTimeout(() => {
-        checkNFTAccess()
-      }, 1000)
-      
-      return () => clearTimeout(timer)
-    }
-  }, [wallet, userFriendlyAddress])
+  // Используем новые хуки
+  const { hasNFTAccess, userNFTs, isCheckingNFTs, checkNFTAccess } = useNFTAccess({
+    userFriendlyAddress,
+    hapticFeedback
+  })
+  
+  const { executeAgent } = useTonTransaction(hapticFeedback)
 
   // Обработка ошибок TON Connect
   useEffect(() => {
@@ -84,78 +64,9 @@ export default function HomePage() {
     return () => {
       window.removeEventListener('tonconnect-error', handleTonConnectError)
     }
-  }, [])
+  }, [hapticFeedback])
 
-  const checkNFTAccess = async () => {
-    if (!userFriendlyAddress) return
-
-    setIsCheckingNFTs(true)
-    try {
-      // Вызываем реальный API для проверки NFT
-      const response = await fetch('http://localhost:8000/api/v1/wallet/check-nft', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          wallet_address: userFriendlyAddress
-        })
-      })
-      
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`)
-      }
-      
-      const nftData = await response.json()
-      
-      setUserNFTs(nftData.nfts || [])
-      setHasNFTAccess(nftData.has_access || false)
-      
-      if (nftData.has_access) {
-        hapticFeedback.notification('success')
-        toast.success(`🎉 NFT доступ подтвержден! Уровень: ${nftData.access_level}`)
-      } else {
-        toast.error('❌ NFT не найдены в разрешенных коллекциях')
-      }
-      
-      // Показываем дополнительную информацию если есть fallback режим
-      if (nftData.fallback_mode) {
-        console.log('Работаем в fallback режиме (TON API недоступно)')
-      }
-      
-    } catch (error) {
-      console.error('Ошибка проверки NFT:', error)
-      
-      // Более детальная обработка ошибок
-      if (error instanceof TypeError && error.message.includes('NetworkError')) {
-        toast.error('Сервер недоступен. Проверьте подключение.')
-      } else {
-        toast.error('Ошибка проверки NFT коллекций')
-      }
-      
-      hapticFeedback.notification('error')
-      
-      // Fallback к демо режиму
-      const mockNFTs = [
-        {
-          collection: ALLOWED_COLLECTIONS[0].address,
-          tokenId: '1',
-          name: 'NeuroNest Access Pass #1 (Demo)',
-          image: 'https://via.placeholder.com/300x300/00FFFF/000000?text=NEURONEST',
-          verified: true
-        }
-      ]
-      
-      setUserNFTs(mockNFTs)
-      setHasNFTAccess(true)
-      toast.success('🔄 Демо режим активирован')
-      
-    } finally {
-      setIsCheckingNFTs(false)
-    }
-  }
-
-  const executeAgent = async (agentName: string, price: number) => {
+  const handleExecuteAgent = async (agentName: string, price: number) => {
     if (!wallet) {
       toast.error('Подключите кошелек')
       return
@@ -167,63 +78,14 @@ export default function HomePage() {
     }
 
     try {
-      hapticFeedback.impact('medium')
-      
-      // Проверяем готовность TON Connect UI
-      if (!tonConnectUI) {
-        toast.error('TON Connect не готов. Попробуйте позже.')
-        return
-      }
-      
-      // Симуляция транзакции в TON
-      const transaction = {
-        validUntil: Math.floor(Date.now() / 1000) + 60,
-        messages: [
-          {
-            address: "EQBfbkxNqgzQQm_GqL4zQGLm2N6_r-5rG_3k4l__NF8qf", // адрес получателя
-            amount: (price * 1000000000).toString(), // в наногрантах
-            payload: btoa(JSON.stringify({
-              type: 'agent_execution',
-              agent: agentName,
-              user: user?.id || 'anonymous'
-            }))
-          }
-        ]
-      }
-
-      toast.loading('Выполнение транзакции...', { id: 'tx' })
-      
-      const result = await tonConnectUI.sendTransaction(transaction)
-      
-      toast.success(`✅ Агент ${agentName} запущен!`, { id: 'tx' })
-      hapticFeedback.notification('success')
-      
-    } catch (error: any) {
-      console.error('Ошибка транзакции:', error)
-      
-      // Специальная обработка ошибок TON Connect
-      if (error?.name === 'TonConnectError') {
-        toast.error('Транзакция отменена пользователем', { id: 'tx' })
-      } else if (error?.message?.includes('User rejected')) {
-        toast.error('Транзакция отклонена', { id: 'tx' })
-      } else {
-        toast.error('Ошибка выполнения транзакции', { id: 'tx' })
-      }
-      
-      hapticFeedback.notification('error')
+      await executeAgent(agentName, price, user?.id?.toString())
+    } catch (error) {
+      // Ошибка уже обработана в хуке
     }
   }
 
-  const formatAddress = (address: string) => {
-    if (!address) return ''
-    return `${address.slice(0, 6)}...${address.slice(-6)}`
-  }
-
-  const getAccessLevel = () => {
-    if (!hasNFTAccess) return 'none'
-    if (userNFTs.length >= 10) return 'premium'
-    if (userNFTs.length >= 3) return 'advanced'
-    return 'basic'
+  const getCurrentAccessLevel = () => {
+    return getAccessLevel(userNFTs.length)
   }
 
   // Loading скелетон компонент
@@ -322,36 +184,12 @@ export default function HomePage() {
             </motion.div>
             
             {/* Wallet Section */}
-            <div className="flex items-center space-x-4">
-              {wallet && (
-                <motion.div
-                  initial={{ opacity: 0, scale: 0.8 }}
-                  animate={{ opacity: 1, scale: 1 }}
-                  className="cyber-card px-4 py-2 flex items-center space-x-3"
-                >
-                  <div className="flex flex-col items-end">
-                    <div className="flex items-center space-x-2">
-                      <Wallet className="w-4 h-4 text-cyan-400" />
-                      <span className="text-cyan-300 text-sm font-mono">
-                        {formatAddress(userFriendlyAddress)}
-                      </span>
-                    </div>
-                    {hasNFTAccess && (
-                      <div className="flex items-center space-x-1 mt-1">
-                        <Shield className="w-3 h-3 text-green-400" />
-                        <span className="text-green-400 text-xs font-mono uppercase">
-                          {getAccessLevel()} ACCESS
-                        </span>
-                      </div>
-                    )}
-                  </div>
-                </motion.div>
-              )}
-              
-              <div className="cyber-button-wrapper">
-                <TonConnectButton className="!bg-gradient-to-r !from-cyan-500 !to-blue-500 !rounded-lg !text-black !font-bold !font-mono" />
-              </div>
-            </div>
+            <WalletSection
+              wallet={wallet}
+              userFriendlyAddress={userFriendlyAddress || ''}
+              hasNFTAccess={hasNFTAccess}
+              getAccessLevel={getCurrentAccessLevel}
+            />
           </div>
         </header>
 
@@ -420,7 +258,7 @@ export default function HomePage() {
                   color: "from-purple-400 to-blue-500"
                 },
                 { 
-                  icon: Cpu, 
+                  icon: CpuIcon, 
                   title: "AI AGENTS", 
                   description: "20+ продвинутых AI агентов",
                   color: "from-cyan-400 to-blue-400"
@@ -472,84 +310,19 @@ export default function HomePage() {
                 <div className="flex items-center space-x-2 text-cyan-400 text-sm font-mono">
                   <span>ACCESS LEVEL:</span>
                   <span className="bg-cyan-400/20 px-2 py-1 rounded uppercase">
-                    {getAccessLevel()}
+                    {getCurrentAccessLevel()}
                   </span>
                 </div>
               </div>
               
               <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                {[
-                  {
-                    name: "CRYPTO ANALYZER",
-                    description: "Анализ крипто-портфеля и торговые стратегии",
-                    price: 5.0,
-                    rating: 95,
-                    icon: TrendingUp,
-                    category: "FINANCE"
-                  },
-                  {
-                    name: "NFT VALUATOR",
-                    description: "Оценка NFT коллекций и прогноз цен",
-                    price: 3.0,
-                    rating: 88,
-                    icon: Shield,
-                    category: "FINANCE"
-                  },
-                  {
-                    name: "CODE REVIEWER",
-                    description: "Автоматический анализ и ревью кода",
-                    price: 2.0,
-                    rating: 92,
-                    icon: Bot,
-                    category: "DEV"
-                  }
-                ].map((agent, index) => (
-                  <motion.div
+                {AI_AGENTS.map((agent, index) => (
+                  <AIAgentCard
                     key={agent.name}
-                    initial={{ opacity: 0, y: 20 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ delay: 1.8 + index * 0.2 }}
-                    className="cyber-card p-6 group hover:scale-105 transition-all cursor-pointer"
-                  >
-                    <div className="space-y-4">
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center space-x-3">
-                          <div className="neural-node w-10 h-10 flex items-center justify-center">
-                            <agent.icon className="w-5 h-5 text-black" />
-                          </div>
-                          <span className="text-xs font-mono text-cyan-400 bg-cyan-400/10 px-2 py-1 rounded">
-                            {agent.category}
-                          </span>
-                        </div>
-                        <div className="text-right">
-                          <div className="text-xs text-gray-400 font-mono">RATING</div>
-                          <div className="text-sm font-bold text-green-400 font-mono">{agent.rating}%</div>
-                        </div>
-                      </div>
-                      
-                      <div>
-                        <h3 className="text-lg font-bold text-cyan-300 font-mono mb-2">
-                          {agent.name}
-                        </h3>
-                        <p className="text-gray-400 text-sm leading-relaxed">
-                          {agent.description}
-                        </p>
-                      </div>
-                      
-                      <div className="flex items-center justify-between pt-4 border-t border-gray-700">
-                        <span className="text-cyan-400 font-mono font-bold">
-                          {agent.price} TON
-                        </span>
-                        <button 
-                          className="cyber-button px-4 py-2 text-sm font-mono flex items-center space-x-2"
-                          onClick={() => executeAgent(agent.name, agent.price)}
-                        >
-                          <span>EXECUTE</span>
-                          <ExternalLink className="w-3 h-3" />
-                        </button>
-                      </div>
-                    </div>
-                  </motion.div>
+                    agent={agent}
+                    index={index}
+                    onExecute={handleExecuteAgent}
+                  />
                 ))}
               </div>
             </div>
