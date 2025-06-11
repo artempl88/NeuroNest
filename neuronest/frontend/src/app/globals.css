@@ -1,0 +1,416 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --background: 0 0% 4%;
+    --foreground: 195 100% 75%;
+
+    --card: 0 0% 8%;
+    --card-foreground: 195 100% 90%;
+
+    --popover: 0 0% 8%;
+    --popover-foreground: 195 100% 90%;
+
+    --primary: 195 100% 50%;
+    --primary-foreground: 0 0% 0%;
+
+    --secondary: 0 0% 12%;
+    --secondary-foreground: 195 100% 90%;
+
+    --muted: 0 0% 12%;
+    --muted-foreground: 195 50% 60%;
+
+    --accent: 195 100% 50%;
+    --accent-foreground: 0 0% 0%;
+
+    --destructive: 0 84.2% 60.2%;
+    --destructive-foreground: 210 40% 98%;
+
+    --border: 195 30% 20%;
+    --input: 195 30% 15%;
+    --ring: 195 100% 50%;
+
+    --radius: 0.5rem;
+
+    /* Нейросетевые цвета */
+    --neural-primary: #00FFFF;
+    --neural-secondary: #00BFFF;
+    --neural-accent: #0080FF;
+    --neural-glow: rgba(0, 255, 255, 0.5);
+    --neural-bg: #0A0A0A;
+    --neural-surface: #111111;
+  }
+
+  .dark {
+    --background: 222.2 84% 4.9%;
+    --foreground: 210 40% 98%;
+
+    --card: 222.2 84% 4.9%;
+    --card-foreground: 210 40% 98%;
+
+    --popover: 222.2 84% 4.9%;
+    --popover-foreground: 210 40% 98%;
+
+    --primary: 210 40% 98%;
+    --primary-foreground: 222.2 47.4% 11.2%;
+
+    --secondary: 217.2 32.6% 17.5%;
+    --secondary-foreground: 210 40% 98%;
+
+    --muted: 217.2 32.6% 17.5%;
+    --muted-foreground: 215 20.2% 65.1%;
+
+    --accent: 217.2 32.6% 17.5%;
+    --accent-foreground: 210 40% 98%;
+
+    --destructive: 0 62.8% 30.6%;
+    --destructive-foreground: 210 40% 98%;
+
+    --border: 217.2 32.6% 17.5%;
+    --input: 217.2 32.6% 17.5%;
+    --ring: 212.7 26.8% 83.9%;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+  body {
+    @apply bg-background text-foreground;
+    background: linear-gradient(135deg, #000000 0%, #0A0A0A 50%, #111111 100%);
+    min-height: 100vh;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  }
+}
+
+/* Нейросетевые элементы */
+.neural-node {
+  position: relative;
+  background: var(--neural-primary);
+  border-radius: 50%;
+  box-shadow: 
+    0 0 20px var(--neural-glow),
+    inset 0 0 20px rgba(0, 255, 255, 0.1);
+  animation: pulse-glow 2s ease-in-out infinite alternate;
+}
+
+.neural-node::before {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 60%;
+  height: 60%;
+  background: var(--neural-bg);
+  border-radius: 50%;
+}
+
+.neural-connection {
+  position: absolute;
+  background: linear-gradient(90deg, transparent, var(--neural-primary), transparent);
+  height: 2px;
+  animation: data-flow 3s linear infinite;
+}
+
+.neural-grid {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  opacity: 0.1;
+  background-image: 
+    linear-gradient(90deg, var(--neural-primary) 1px, transparent 1px),
+    linear-gradient(0deg, var(--neural-primary) 1px, transparent 1px);
+  background-size: 50px 50px;
+  animation: grid-glow 4s ease-in-out infinite alternate;
+  pointer-events: none;
+  z-index: 0;
+}
+
+.cyber-card {
+  background: rgba(17, 17, 17, 0.8);
+  backdrop-filter: blur(10px);
+  border: 1px solid rgba(0, 255, 255, 0.2);
+  border-radius: 12px;
+  position: relative;
+  overflow: hidden;
+}
+
+.cyber-card::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: -100%;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(90deg, transparent, rgba(0, 255, 255, 0.1), transparent);
+  animation: scan-line 3s linear infinite;
+}
+
+.cyber-button {
+  background: linear-gradient(45deg, var(--neural-secondary), var(--neural-primary));
+  border: none;
+  position: relative;
+  overflow: hidden;
+  transition: all 0.3s ease;
+}
+
+.cyber-button::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: -100%;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.2), transparent);
+  transition: left 0.5s ease;
+}
+
+.cyber-button:hover::before {
+  left: 100%;
+}
+
+.cyber-button:hover {
+  box-shadow: 
+    0 0 30px var(--neural-glow),
+    0 0 60px rgba(0, 255, 255, 0.3);
+  transform: translateY(-2px);
+}
+
+.neural-text {
+  background: linear-gradient(45deg, var(--neural-primary), var(--neural-secondary));
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  font-weight: bold;
+}
+
+/* TON Connect Button Styling */
+.cyber-button-wrapper [data-tc-dropdown-container] {
+  background: rgba(17, 17, 17, 0.95) !important;
+  border: 1px solid rgba(0, 255, 255, 0.3) !important;
+  border-radius: 12px !important;
+  backdrop-filter: blur(10px) !important;
+}
+
+.cyber-button-wrapper [data-tc-connect-button] {
+  background: linear-gradient(45deg, #00BFFF, #00FFFF) !important;
+  border: none !important;
+  border-radius: 8px !important;
+  font-family: 'Courier New', monospace !important;
+  font-weight: bold !important;
+  color: #000000 !important;
+  transition: all 0.3s ease !important;
+  position: relative !important;
+  overflow: hidden !important;
+}
+
+.cyber-button-wrapper [data-tc-connect-button]:hover {
+  box-shadow: 
+    0 0 20px rgba(0, 255, 255, 0.5),
+    0 0 40px rgba(0, 255, 255, 0.3) !important;
+  transform: translateY(-2px) !important;
+}
+
+.cyber-button-wrapper [data-tc-connect-button]::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: -100%;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.2), transparent);
+  transition: left 0.5s ease;
+}
+
+.cyber-button-wrapper [data-tc-connect-button]:hover::before {
+  left: 100%;
+}
+
+/* TON Connect Modal Styling */
+[data-tc-modal-container] {
+  background: rgba(0, 0, 0, 0.8) !important;
+  backdrop-filter: blur(10px) !important;
+}
+
+[data-tc-modal] {
+  background: linear-gradient(135deg, #0A0A0A 0%, #111111 100%) !important;
+  border: 1px solid rgba(0, 255, 255, 0.3) !important;
+  border-radius: 16px !important;
+  box-shadow: 
+    0 0 40px rgba(0, 255, 255, 0.2),
+    inset 0 0 40px rgba(0, 255, 255, 0.05) !important;
+}
+
+[data-tc-modal] * {
+  color: #00FFFF !important;
+  font-family: 'Courier New', monospace !important;
+}
+
+[data-tc-modal] h1,
+[data-tc-modal] h2,
+[data-tc-modal] h3 {
+  background: linear-gradient(45deg, #00FFFF, #00BFFF) !important;
+  -webkit-background-clip: text !important;
+  background-clip: text !important;
+  -webkit-text-fill-color: transparent !important;
+}
+
+[data-tc-wallets-modal-list] [data-tc-wallet-item] {
+  background: rgba(17, 17, 17, 0.6) !important;
+  border: 1px solid rgba(0, 255, 255, 0.2) !important;
+  border-radius: 8px !important;
+  transition: all 0.3s ease !important;
+}
+
+[data-tc-wallets-modal-list] [data-tc-wallet-item]:hover {
+  background: rgba(0, 255, 255, 0.1) !important;
+  border-color: rgba(0, 255, 255, 0.5) !important;
+  box-shadow: 0 0 20px rgba(0, 255, 255, 0.2) !important;
+}
+
+/* Анимации */
+@keyframes pulse-glow {
+  0% {
+    box-shadow: 
+      0 0 20px var(--neural-glow),
+      inset 0 0 20px rgba(0, 255, 255, 0.1);
+  }
+  100% {
+    box-shadow: 
+      0 0 40px var(--neural-glow),
+      0 0 60px rgba(0, 255, 255, 0.3),
+      inset 0 0 20px rgba(0, 255, 255, 0.2);
+  }
+}
+
+@keyframes data-flow {
+  0% {
+    opacity: 0;
+    transform: translateX(-100%);
+  }
+  50% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+    transform: translateX(100%);
+  }
+}
+
+@keyframes grid-glow {
+  0% {
+    opacity: 0.05;
+  }
+  100% {
+    opacity: 0.15;
+  }
+}
+
+@keyframes scan-line {
+  0% {
+    left: -100%;
+  }
+  100% {
+    left: 100%;
+  }
+}
+
+@keyframes float {
+  0%, 100% {
+    transform: translateY(0px);
+  }
+  50% {
+    transform: translateY(-10px);
+  }
+}
+
+/* Глитч эффект */
+.glitch {
+  position: relative;
+  animation: glitch 2s linear infinite;
+}
+
+.glitch::before,
+.glitch::after {
+  content: attr(data-text);
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+}
+
+.glitch::before {
+  animation: glitch-1 0.25s infinite linear alternate-reverse;
+  color: #ff0040;
+  z-index: -1;
+}
+
+.glitch::after {
+  animation: glitch-2 0.25s infinite linear alternate-reverse;
+  color: #00ffff;
+  z-index: -2;
+}
+
+@keyframes glitch {
+  0%, 100% {
+    text-shadow: none;
+  }
+  10% {
+    text-shadow: 3px 0 #ff0040;
+  }
+  20% {
+    text-shadow: -3px 0 #00ffff;
+  }
+  30% {
+    text-shadow: 3px 0 #ff0040, -3px 0 #00ffff;
+  }
+}
+
+@keyframes glitch-1 {
+  0% {
+    transform: translateX(0);
+  }
+  20% {
+    transform: translateX(-2px);
+  }
+  40% {
+    transform: translateX(-2px);
+  }
+  60% {
+    transform: translateX(0);
+  }
+  80% {
+    transform: translateX(2px);
+  }
+  100% {
+    transform: translateX(0);
+  }
+}
+
+@keyframes glitch-2 {
+  0% {
+    transform: translateX(0);
+  }
+  20% {
+    transform: translateX(2px);
+  }
+  40% {
+    transform: translateX(2px);
+  }
+  60% {
+    transform: translateX(0);
+  }
+  80% {
+    transform: translateX(-2px);
+  }
+  100% {
+    transform: translateX(0);
+  }
+} 
