@@ -12,7 +12,7 @@ import logging
 from contextlib import asynccontextmanager
 
 from app.core.config import settings
-from app.core.database import init_db
+from app.core.database import init_database
 from app.core.redis import init_redis
 from app.core.logging import setup_logging
 from app.middleware.auth import AuthMiddleware
@@ -33,7 +33,7 @@ async def lifespan(app: FastAPI):
         logger.info("🚀 Запуск NeuroNest Backend...")
         
         # Инициализация базы данных
-        await init_db()
+        init_database()
         logger.info("✅ База данных инициализирована")
         
         # Инициализация Redis
@@ -78,7 +78,7 @@ def setup_middleware(app: FastAPI):
     # CORS
     app.add_middleware(
         CORSMiddleware,
-        allow_origins=settings.CORS_ORIGINS,
+        allow_origins=settings.cors_origins_list,
         allow_credentials=True,
         allow_methods=["*"],
         allow_headers=["*"],
@@ -88,7 +88,7 @@ def setup_middleware(app: FastAPI):
     if not settings.DEBUG:
         app.add_middleware(
             TrustedHostMiddleware,
-            allowed_hosts=settings.ALLOWED_HOSTS
+            allowed_hosts=settings.allowed_hosts_list
         )
     
     # Аутентификация

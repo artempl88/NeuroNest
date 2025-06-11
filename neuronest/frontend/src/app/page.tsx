@@ -20,6 +20,7 @@ import {
 import { NeuralNetwork, StaticNeuralNodes } from '../components/ui/NeuralNetwork'
 import { WalletSection } from '../components/sections/WalletSection'
 import { AIAgentCard } from '../components/sections/AIAgentCard'
+import { ManualNFTCheck } from '../components/sections/ManualNFTCheck'
 import { useTelegram } from '../hooks/useTelegram'
 import { useNFTAccess } from '../hooks/useNFTAccess'
 import { useTonTransaction } from '../hooks/useTonTransaction'
@@ -47,7 +48,7 @@ export default function HomePage() {
   useEffect(() => {
     const handleTonConnectError = (error: any) => {
       console.error('TON Connect Error:', error)
-      hapticFeedback.notification('error')
+      hapticFeedback?.notification('error')
       toast.error('Ошибка подключения кошелька. Попробуйте еще раз.')
     }
 
@@ -80,6 +81,30 @@ export default function HomePage() {
     return getAccessLevel(userNFTs.length)
   }
 
+  // ✅ ДОБАВЛЕНО: функция для ручной проверки NFT с уведомлениями
+  const handleManualNFTCheck = async () => {
+    if (!userFriendlyAddress) {
+      toast.error('Подключите кошелек для проверки NFT')
+      return
+    }
+
+    try {
+      toast.loading('Проверяем ваши NFT...', { id: 'manual-nft-check' })
+      await checkNFTAccess()
+      
+      // Показываем результат проверки
+      setTimeout(() => {
+        if (hasNFTAccess) {
+          toast.success(`🎉 NFT доступ подтвержден! Уровень: ${getCurrentAccessLevel()}`, { id: 'manual-nft-check' })
+        } else {
+          toast.error('❌ NFT не найдены в разрешенных коллекциях', { id: 'manual-nft-check' })
+        }
+      }, 500)
+    } catch (error) {
+      toast.error('Ошибка проверки NFT', { id: 'manual-nft-check' })
+    }
+  }
+
   // Loading скелетон компонент
   const LoadingSkeleton = () => (
     <div className="animate-pulse">
@@ -106,6 +131,7 @@ export default function HomePage() {
             color: '#00FFFF',
             border: '1px solid rgba(0, 255, 255, 0.3)',
           },
+          duration: 3000, // ✅ ДОБАВЛЕНО: ограничиваем время показа уведомлений
         }}
       />
       
@@ -321,49 +347,13 @@ export default function HomePage() {
           </motion.section>
         )}
 
-        {/* Welcome Message for New Users */}
+        {/* ✅ ИСПРАВЛЕНО: Используем новый компонент ManualNFTCheck */}
         {wallet && !hasNFTAccess && (
-          <motion.section
-            initial={{ opacity: 0, scale: 0.9 }}
-            animate={{ opacity: 1, scale: 1 }}
-            transition={{ delay: 0.5 }}
-            className="px-6 pt-8"
-          >
-            <div className="max-w-2xl mx-auto cyber-card p-8 text-center">
-              <div className="neural-node w-20 h-20 flex items-center justify-center mx-auto mb-6">
-                <Shield className="w-10 h-10 text-black" />
-              </div>
-              <h3 className="text-2xl font-bold neural-text mb-4 font-mono">
-                ACCESS REQUIRED
-              </h3>
-              <p className="text-gray-300 mb-6 leading-relaxed">
-                Для доступа к AI агентам необходимо владение NFT из коллекции 
-                NeuroNest Access Collection.
-              </p>
-              
-              {isCheckingNFTs && (
-                <div className="text-cyan-400 font-mono mb-4">
-                  Проверяем ваши NFT...
-                </div>
-              )}
-              
-              <div className="flex flex-col sm:flex-row gap-4 justify-center">
-                <button 
-                  className="cyber-button px-6 py-3 font-mono font-bold"
-                  onClick={checkNFTAccess}
-                  disabled={isCheckingNFTs}
-                >
-                  {isCheckingNFTs ? 'CHECKING...' : 'CHECK NFT'}
-                </button>
-                <button 
-                  className="border border-cyan-400/30 px-6 py-3 font-mono font-bold text-cyan-400 hover:border-cyan-400/60 transition-colors"
-                  onClick={() => window.open('https://getgems.io/collection/EQCGbQyAJxxMsYQWLCklkXQq4fkIBK3kz3GA1TkFJyUR9nTH', '_blank')}
-                >
-                  GET NFT
-                </button>
-              </div>
-            </div>
-          </motion.section>
+          <ManualNFTCheck 
+            isCheckingNFTs={isCheckingNFTs}
+            onCheckNFT={handleManualNFTCheck}
+            userFriendlyAddress={userFriendlyAddress}
+          />
         )}
 
         {/* No Wallet Connected */}

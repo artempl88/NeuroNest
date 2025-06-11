@@ -47,7 +47,7 @@ def get_database():
         db.close()
 
 
-async def init_database() -> None:
+def init_database() -> None:
     """Инициализация базы данных"""
     try:
         # Создаем все таблицы
@@ -55,14 +55,14 @@ async def init_database() -> None:
         logger.info("✅ Таблицы базы данных созданы")
         
         # Создаем начальные данные
-        await create_initial_data()
+        create_initial_data()
         
     except Exception as e:
         logger.error(f"❌ Ошибка инициализации базы данных: {e}")
         raise
 
 
-async def create_initial_data() -> None:
+def create_initial_data() -> None:
     """Создание начальных данных для приложения"""
     db = None
     try:
@@ -92,12 +92,18 @@ def create_demo_agents(db: Session) -> None:
     
     demo_agents = [
         {
-            "name": "Crypto Portfolio Analyzer",
+            "name": "crypto-portfolio-analyzer",
+            "display_name": "Crypto Portfolio Analyzer",
             "description": "Анализирует криптовалютный портфель и предоставляет рекомендации по торговле",
+            "short_description": "AI анализ крипто-портфеля",
             "category": AgentCategory.FINANCE,
-            "price_ton": 5.0,
+            "base_price": 5000000000,  # 5 NOTPUNKS
+            "docker_image": "neuronest/agents:crypto-analyzer",
+            "docker_tag": "latest",
             "rating": 95,
             "status": AgentStatus.ACTIVE,
+            "author": "NeuroNest Team",
+            "version": "1.0.0",
             "input_schema": {
                 "type": "object",
                 "properties": {
@@ -116,12 +122,18 @@ def create_demo_agents(db: Session) -> None:
             }
         },
         {
-            "name": "NFT Collection Valuator",
+            "name": "nft-collection-valuator",
+            "display_name": "NFT Collection Valuator",
             "description": "Оценивает NFT коллекции и прогнозирует ценовые тренды",
+            "short_description": "Оценка стоимости NFT коллекций",
             "category": AgentCategory.FINANCE,
-            "price_ton": 3.0,
+            "base_price": 3000000000,  # 3 NOTPUNKS
+            "docker_image": "neuronest/agents:nft-valuator",
+            "docker_tag": "latest",
             "rating": 88,
             "status": AgentStatus.ACTIVE,
+            "author": "NeuroNest Team",
+            "version": "1.0.0",
             "input_schema": {
                 "type": "object",
                 "properties": {
@@ -140,12 +152,18 @@ def create_demo_agents(db: Session) -> None:
             }
         },
         {
-            "name": "Smart Contract Auditor",
+            "name": "smart-contract-auditor",
+            "display_name": "Smart Contract Auditor",
             "description": "Автоматический анализ и аудит смарт-контрактов на уязвимости",
+            "short_description": "Аудит безопасности смарт-контрактов",
             "category": AgentCategory.DEVELOPMENT,
-            "price_ton": 8.0,
+            "base_price": 8000000000,  # 8 NOTPUNKS
+            "docker_image": "neuronest/agents:contract-auditor",
+            "docker_tag": "latest",
             "rating": 92,
             "status": AgentStatus.ACTIVE,
+            "author": "NeuroNest Team",
+            "version": "1.0.0",
             "input_schema": {
                 "type": "object",
                 "properties": {
@@ -176,7 +194,7 @@ def create_demo_agents(db: Session) -> None:
         try:
             agent = Agent(**agent_data)
             db.add(agent)
-            logger.info(f"Создан агент: {agent.name}")
+            logger.info(f"Создан агент: {agent.display_name}")
         except Exception as e:
             logger.error(f"Ошибка создания агента {agent_data['name']}: {e}")
     

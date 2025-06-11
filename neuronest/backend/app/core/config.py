@@ -56,6 +56,7 @@ class Settings(BaseSettings):
     TON_NETWORK: str = Field(default="testnet", description="Сеть TON (testnet/mainnet)")
     TON_API_ENDPOINT: str = Field(..., description="Endpoint TON API")
     TON_API_KEY: str = Field(..., description="Ключ TON API")
+    TONAPI_TOKEN: Optional[str] = Field(default=None, description="Токен TONAPI")
     
     # NFT коллекции для контроля доступа
     NOT_PUNKS_COLLECTION: str = Field(..., description="Адрес коллекции NOT Punks")
@@ -116,30 +117,17 @@ class Settings(BaseSettings):
     # =============================================================================
     # HTTP/CORS
     # =============================================================================
-    CORS_ORIGINS: List[str] = Field(default=["*"], description="Разрешенные домены для CORS")
-    ALLOWED_HOSTS: List[str] = Field(default=["*"], description="Разрешенные хосты")
+    CORS_ORIGINS: str = Field(default="*", description="Разрешенные домены для CORS (через запятую)")
+    ALLOWED_HOSTS: str = Field(default="*", description="Разрешенные хосты (через запятую)")
     
     # =============================================================================
     # DEVELOPMENT НАСТРОЙКИ
     # =============================================================================
+    DEVELOPMENT_MODE: bool = Field(default=False, description="Режим разработки")
     DEV_SKIP_NFT_CHECK: bool = Field(default=False, description="Пропустить проверку NFT в dev режиме")
     DEV_MOCK_PAYMENTS: bool = Field(default=False, description="Использовать моки для платежей")
     DEV_ENABLE_DEBUG_UI: bool = Field(default=False, description="Включить debug UI")
     DEV_ALLOW_CORS_ALL: bool = Field(default=False, description="Разрешить CORS для всех доменов")
-    
-    @validator('CORS_ORIGINS', pre=True)
-    def parse_cors_origins(cls, v):
-        """Парсинг CORS origins из строки"""
-        if isinstance(v, str):
-            return [origin.strip() for origin in v.split(',')]
-        return v
-    
-    @validator('ALLOWED_HOSTS', pre=True)
-    def parse_allowed_hosts(cls, v):
-        """Парсинг allowed hosts из строки"""
-        if isinstance(v, str):
-            return [host.strip() for host in v.split(',')]
-        return v
     
     @property
     def nft_collections(self) -> List[str]:
@@ -149,6 +137,20 @@ class Settings(BaseSettings):
             self.NOT_PUNKS_GIRLS_COLLECTION,
             self.TNO_ELEMENTAL_KIDS_COLLECTION
         ]
+    
+    @property
+    def cors_origins_list(self) -> List[str]:
+        """Получить список CORS origins"""
+        if isinstance(self.CORS_ORIGINS, str):
+            return [origin.strip() for origin in self.CORS_ORIGINS.split(',')]
+        return self.CORS_ORIGINS
+    
+    @property
+    def allowed_hosts_list(self) -> List[str]:
+        """Получить список разрешенных хостов"""
+        if isinstance(self.ALLOWED_HOSTS, str):
+            return [host.strip() for host in self.ALLOWED_HOSTS.split(',')]
+        return self.ALLOWED_HOSTS
     
     @property
     def database_config(self) -> dict:

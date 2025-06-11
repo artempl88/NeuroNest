@@ -2,7 +2,7 @@
 Модель транзакций NeuroNest
 """
 
-from sqlalchemy import Column, Integer, String, DateTime, Boolean, BigInteger, Text, ForeignKey, Enum
+from sqlalchemy import Column, Integer, String, DateTime, Boolean, JSON, BigInteger, Text, ForeignKey, Enum
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 from datetime import datetime, timedelta
@@ -10,6 +10,7 @@ from typing import Optional, Dict, Any
 import enum
 
 from app.core.database import Base
+from app.core.constants import from_minimal_units
 
 
 class TransactionType(str, enum.Enum):
@@ -82,17 +83,17 @@ class Transaction(Base):
     @property
     def amount_formatted(self) -> float:
         """Сумма в удобном для чтения формате"""
-        return self.amount / (10 ** 9)
+        return from_minimal_units(self.amount)
     
     @property
     def commission_formatted(self) -> float:
         """Комиссия в удобном для чтения формате"""
-        return self.commission / (10 ** 9)
+        return from_minimal_units(self.commission)
     
     @property
     def total_amount_formatted(self) -> float:
         """Общая сумма в удобном для чтения формате"""
-        return self.total_amount / (10 ** 9)
+        return from_minimal_units(self.total_amount)
     
     @property
     def is_pending(self) -> bool:
@@ -236,15 +237,4 @@ def calculate_total_with_commission(amount: int, commission_rate: float) -> tupl
     """Расчет общей суммы с комиссией"""
     commission = calculate_commission(amount, commission_rate)
     total = amount + commission
-    return commission, total
-
-
-def format_notpunks_amount(amount: int) -> str:
-    """Форматирование суммы NOTPUNKS для отображения"""
-    formatted = amount / (10 ** 9)
-    if formatted >= 1000000:
-        return f"{formatted/1000000:.2f}M NOTPUNKS"
-    elif formatted >= 1000:
-        return f"{formatted/1000:.2f}K NOTPUNKS"
-    else:
-        return f"{formatted:.4f} NOTPUNKS" 
+    return commission, total 

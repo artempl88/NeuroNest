@@ -10,6 +10,7 @@ from typing import Optional, List, Dict, Any
 import enum
 
 from app.core.database import Base
+from app.core.constants import from_minimal_units
 
 
 class AgentCategory(str, enum.Enum):
@@ -22,6 +23,7 @@ class AgentCategory(str, enum.Enum):
     PRODUCTIVITY = "productivity"
     ENTERTAINMENT = "entertainment"
     EDUCATION = "education"
+    DEVELOPMENT = "development"  # Добавлено для разработки
 
 
 class AgentStatus(str, enum.Enum):

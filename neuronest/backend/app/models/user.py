@@ -9,6 +9,7 @@ from datetime import datetime
 from typing import Optional, List, Dict, Any
 
 from app.core.database import Base
+from app.core.constants import from_minimal_units
 
 
 class User(Base):
@@ -78,7 +79,7 @@ class User(Base):
     @property
     def notpunks_balance_formatted(self) -> float:
         """Баланс NOTPUNKS в удобном для чтения формате"""
-        return self.notpunks_balance / (10 ** 9)  # 9 decimal places
+        return from_minimal_units(self.notpunks_balance)
     
     def has_nft_from_collections(self, collections: List[str]) -> bool:
         """Проверка наличия NFT из указанных коллекций"""

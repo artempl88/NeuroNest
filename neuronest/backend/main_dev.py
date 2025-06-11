@@ -319,7 +319,7 @@ if __name__ == "__main__":
     logger.info(f"🤖 Telegram bot configured: {'✅' if settings.TELEGRAM_BOT_TOKEN else '❌'}")
     
     uvicorn.run(
-        "main_simple:app",
+        "main_dev:app",
         host="0.0.0.0",
         port=8000,
         reload=True,
