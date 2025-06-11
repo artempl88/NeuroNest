@@ -1,401 +1,327 @@
 """
-Упрощенная версия NeuroNest Backend для тестирования
+Упрощенная версия NeuroNest API для быстрого запуска
+Используется для разработки и демонстрации
 """
 
-from fastapi import FastAPI, HTTPException, Header
-from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel
-import uvicorn
-import json
-import hmac
+import os
+import logging
 import hashlib
-from urllib.parse import parse_qsl
-from typing import Optional
+import hmac
+import urllib.parse
+from contextlib import asynccontextmanager
+from typing import Dict, List, Any
 
-# Импортируем TON API клиент
-from ton_api import ton_client
+from fastapi import FastAPI, HTTPException, Depends
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
+from pydantic import BaseModel, Field
 
-# Создание приложения
+from ton_api import TONAPIClient
+
+# Настройка логирования
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
+# Конфигурация
+class Settings:
+    # Telegram Bot API Token
+    TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN", "")
+    
+    # TON API настройки
+    TON_API_KEY = os.getenv("TON_API_KEY", "")
+    TONAPI_TOKEN = os.getenv("TONAPI_TOKEN", "")
+    
+    # Режим разработки
+    DEVELOPMENT_MODE = os.getenv("DEVELOPMENT_MODE", "true").lower() == "true"
+    
+    # Разрешенные NFT коллекции
+    ALLOWED_NFT_COLLECTIONS = [
+        "EQCGbQyAJxxMsYQWLCklkXQq4fkIBK3kz3GA1TkFJyUR9nTH"  # NeuroNest Access Collection
+    ]
+
+settings = Settings()
+
+# Pydantic модели
+class WalletCheckRequest(BaseModel):
+    wallet_address: str = Field(..., min_length=10, max_length=100)
+
+class TelegramInitData(BaseModel):
+    init_data: str
+    hash: str
+
+class AgentExecutionRequest(BaseModel):
+    agent_name: str = Field(..., min_length=1, max_length=100)
+    wallet_address: str = Field(..., min_length=10, max_length=100)
+    parameters: Dict[str, Any] = Field(default_factory=dict)
+
+# Глобальный TON API клиент
+ton_client = TONAPIClient(
+    api_key=settings.TON_API_KEY,
+    tonapi_token=settings.TONAPI_TOKEN
+)
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Управление жизненным циклом приложения"""
+    logger.info("🚀 NeuroNest API запускается...")
+    
+    # Startup
+    try:
+        logger.info("✅ NeuroNest API готов к работе")
+        yield
+    finally:
+        # Shutdown
+        logger.info("🔄 NeuroNest API завершает работу...")
+
+# Создание приложения FastAPI
 app = FastAPI(
     title="NeuroNest API",
-    description="Telegram Mini-App маркетплейс AI агентов с NFT-доступом",
-    version="1.0.0"
+    description="Упрощенный API для Telegram Mini App с NFT доступом",
+    version="1.0.0",
+    lifespan=lifespan
 )
 
 # CORS настройки
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[
-        "http://localhost:3000", 
-        "http://localhost:3001", 
-        "https://neuronest.notpunks.com",
-        "https://bridge.tonapi.io",
-        "https://tonhub.com",
-        "https://wallet.ton.org"
+        "http://localhost:3000",
+        "http://127.0.0.1:3000", 
+        "https://neuronest.app",
+        "https://*.telegram.org"
     ],
     allow_credentials=True,
-    allow_methods=["*"],
+    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
     allow_headers=["*"],
 )
 
-# Модели данных
-class TelegramUser(BaseModel):
-    id: int
-    first_name: str
-    last_name: Optional[str] = None
-    username: Optional[str] = None
-    language_code: Optional[str] = None
-    is_premium: Optional[bool] = False
-
-class ExecuteAgentRequest(BaseModel):
-    agent_id: str
-    wallet_address: Optional[str] = None
-    transaction_hash: Optional[str] = None
-
-class NFTCheckRequest(BaseModel):
-    wallet_address: str
-
-# Мок данные разрешенных NFT коллекций
-ALLOWED_COLLECTIONS = [
-    {
-        "address": "EQCGbQyAJxxMsYQWLCklkXQq4fkIBK3kz3GA1TkFJyUR9nTH",
-        "name": "NeuroNest Access Collection",
-        "description": "Официальная NFT коллекция для доступа к NeuroNest"
-    }
-]
-
-def verify_telegram_data(init_data: str, bot_token: str = "fake_token") -> dict:
+def verify_telegram_data(init_data: str, bot_token: str = None) -> Dict[str, Any]:
     """
-    Проверка данных от Telegram WebApp
-    В реальном проекте здесь будет настоящий токен бота
+    Проверяет подлинность данных от Telegram WebApp
     """
+    if not bot_token or bot_token == "":
+        if settings.DEVELOPMENT_MODE:
+            logger.warning("🔓 Development mode: пропуск проверки Telegram данных")
+            # В режиме разработки парсим данные без проверки подписи
+            return parse_init_data_without_verification(init_data)
+        else:
+            raise HTTPException(status_code=401, detail="Telegram bot token не настроен")
+    
     try:
-        # В режиме разработки пропускаем проверку
-        if bot_token == "fake_token":
-            # Парсим данные без проверки
-            parsed_data = dict(parse_qsl(init_data))
-            if 'user' in parsed_data:
-                user_data = json.loads(parsed_data['user'])
-                return {"valid": True, "user": user_data}
-            return {"valid": False}
+        # Парсим init_data
+        parsed_data = dict(urllib.parse.parse_qsl(init_data))
         
-        # Реальная проверка подписи (для продакшена)
-        parsed_data = dict(parse_qsl(init_data))
-        hash_value = parsed_data.pop('hash', '')
+        # Извлекаем hash
+        received_hash = parsed_data.pop('hash', '')
+        if not received_hash:
+            raise HTTPException(status_code=401, detail="Отсутствует hash в данных")
         
-        # Создаем строку данных для проверки
+        # Создаем строку для проверки
         data_check_string = '\n'.join([f"{k}={v}" for k, v in sorted(parsed_data.items())])
         
-        # Вычисляем хеш
-        secret_key = hmac.new(b"WebAppData", bot_token.encode(), hashlib.sha256).digest()
+        # Вычисляем ключ
+        secret_key = hmac.new("WebAppData".encode(), bot_token.encode(), hashlib.sha256).digest()
+        
+        # Вычисляем hash
         calculated_hash = hmac.new(secret_key, data_check_string.encode(), hashlib.sha256).hexdigest()
         
-        if calculated_hash == hash_value:
-            user_data = json.loads(parsed_data.get('user', '{}'))
-            return {"valid": True, "user": user_data}
+        # Проверяем hash
+        if not hmac.compare_digest(received_hash, calculated_hash):
+            raise HTTPException(status_code=401, detail="Неверная подпись данных")
         
-        return {"valid": False}
+        return parsed_data
+        
     except Exception as e:
-        print(f"Ошибка проверки Telegram данных: {e}")
-        return {"valid": False}
+        logger.error(f"Ошибка проверки Telegram данных: {e}")
+        if settings.DEVELOPMENT_MODE:
+            logger.warning("🔓 Development mode: fallback к парсингу без проверки")
+            return parse_init_data_without_verification(init_data)
+        raise HTTPException(status_code=401, detail="Ошибка проверки данных")
 
-async def check_nft_ownership(wallet_address: str) -> dict:
-    """
-    Проверка владения NFT из разрешенных коллекций через TON API
-    """
+def parse_init_data_without_verification(init_data: str) -> Dict[str, Any]:
+    """Парсинг данных без проверки подписи (только для разработки)"""
     try:
-        # Получаем адреса разрешенных коллекций
-        allowed_collection_addresses = [collection["address"] for collection in ALLOWED_COLLECTIONS]
-        
-        # Используем TON API клиент для проверки
-        result = await ton_client.check_collection_ownership(wallet_address, allowed_collection_addresses)
-        
-        return result
-        
+        parsed_data = dict(urllib.parse.parse_qsl(init_data))
+        return parsed_data
     except Exception as e:
-        print(f"Ошибка проверки NFT: {e}")
-        # Fallback к мок данным в случае ошибки API
-        return await _fallback_nft_check(wallet_address)
+        logger.error(f"Ошибка парсинга init_data: {e}")
+        return {"user": {"id": 12345, "first_name": "Demo", "username": "demo_user"}}
 
-async def _fallback_nft_check(wallet_address: str) -> dict:
+async def check_nft_ownership(wallet_address: str) -> Dict[str, Any]:
     """
-    Fallback функция с мок данными когда TON API недоступно
+    Проверяет владение NFT из разрешенных коллекций
     """
-    # Базовая проверка - если адрес валидный, считаем что есть NFT
-    if wallet_address and len(wallet_address) > 10:
-        mock_nfts = [
-            {
-                "collection": ALLOWED_COLLECTIONS[0]["address"],
-                "token_id": "1",
-                "name": "NeuroNest Access Pass #1",
-                "image": "https://via.placeholder.com/300x300/00FFFF/000000?text=NEURONEST",
-                "verified": True,
-                "description": "Official NeuroNest Access NFT"
-            }
-        ]
-        
-        return {
-            "has_access": True,
-            "access_level": "basic",
-            "nfts": mock_nfts,
-            "total_nfts": len(mock_nfts),
-            "fallback_mode": True
-        }
+    logger.info(f"Checking NFT ownership for wallet: {wallet_address}")
+    logger.info(f"Allowed collections: {settings.ALLOWED_NFT_COLLECTIONS}")
     
-    return {
-        "has_access": False,
-        "access_level": "none",
-        "nfts": [],
-        "total_nfts": 0,
-        "fallback_mode": True
-    }
+    try:
+        async with ton_client as client:
+            nfts = await client.get_wallet_nfts(wallet_address)
+            logger.info(f"Retrieved NFTs: {nfts}")
+            
+            # Фильтруем NFT из разрешенных коллекций
+            valid_nfts = []
+            for nft in nfts:
+                nft_collection = nft.get("collection")
+                is_verified = nft.get("verified", False)
+                logger.info(f"Checking NFT: collection={nft_collection}, verified={is_verified}")
+                
+                if nft_collection in settings.ALLOWED_NFT_COLLECTIONS and is_verified:
+                    valid_nfts.append(nft)
+                    logger.info(f"Valid NFT found: {nft}")
+            
+            # Определяем уровень доступа
+            access_level = "none"
+            has_access = len(valid_nfts) > 0
+            
+            if has_access:
+                nft_count = len(valid_nfts)
+                if nft_count >= 10:
+                    access_level = "premium"
+                elif nft_count >= 3:
+                    access_level = "advanced"
+                else:
+                    access_level = "basic"
+            
+            result = {
+                "has_access": has_access,
+                "access_level": access_level,
+                "nfts": valid_nfts,
+                "total_nfts": len(valid_nfts),
+                "all_nfts": nfts,
+                "fallback_mode": len(nfts) == 1 and nfts[0].get("name", "").endswith("Pass #1"),
+                "debug_info": {
+                    "wallet_checked": wallet_address,
+                    "allowed_collections": settings.ALLOWED_NFT_COLLECTIONS,
+                    "raw_nfts_count": len(nfts),
+                    "valid_nfts_count": len(valid_nfts)
+                }
+            }
+            
+            logger.info(f"Final result: {result}")
+            return result
+            
+    except Exception as e:
+        logger.error(f"Ошибка проверки NFT: {e}")
+        raise HTTPException(status_code=500, detail=f"Ошибка проверки NFT: {str(e)}")
 
-@app.get("/")
-async def root():
-    return {"message": "NeuroNest Backend работает! 🚀"}
-
+# API маршруты
 @app.get("/health")
 async def health_check():
+    """Проверка состояния API"""
     return {"status": "healthy", "service": "neuronest-backend"}
 
-@app.post("/api/v1/auth/telegram")
-async def verify_telegram_auth(
-    init_data: str = Header(..., alias="x-telegram-init-data")
-):
-    """Проверка авторизации через Telegram WebApp"""
-    result = verify_telegram_data(init_data)
-    
-    if not result["valid"]:
-        raise HTTPException(status_code=401, detail="Недействительные данные Telegram")
-    
-    user = result["user"]
-    return {
-        "authenticated": True,
-        "user": user,
-        "session_token": f"session_{user['id']}_{hash(str(user))}"
-    }
-
-@app.get("/api/v1/agents")
-async def get_agents():
-    """Список доступных AI агентов"""
-    return {
-        "agents": [
-            {
-                "id": "crypto_analyzer",
-                "name": "crypto_analyzer",
-                "display_name": "💰 Crypto Portfolio Analyzer",
-                "description": "Анализирует криптовалютный портфель и дает рекомендации по торговле",
-                "category": "finance",
-                "base_price": 5.0,
-                "rating": 95,
-                "total_executions": 1234,
-                "required_access": "basic"
-            },
-            {
-                "id": "nft_valuator",
-                "name": "nft_valuator", 
-                "display_name": "🎨 NFT Collection Valuator",
-                "description": "Оценивает стоимость NFT коллекций и предсказывает ценовые тренды",
-                "category": "finance",
-                "base_price": 3.0,
-                "rating": 88,
-                "total_executions": 856,
-                "required_access": "basic"
-            },
-            {
-                "id": "code_reviewer",
-                "name": "code_reviewer",
-                "display_name": "👨‍💻 AI Code Reviewer", 
-                "description": "Проводит детальный анализ кода и предлагает улучшения",
-                "category": "productivity",
-                "base_price": 2.0,
-                "rating": 92,
-                "total_executions": 2156,
-                "required_access": "basic"
-            },
-            {
-                "id": "market_predictor",
-                "name": "market_predictor",
-                "display_name": "📈 Market Predictor Pro",
-                "description": "Предсказывает движения рынка на основе ИИ анализа",
-                "category": "finance",
-                "base_price": 10.0,
-                "rating": 97,
-                "total_executions": 543,
-                "required_access": "advanced"
-            },
-            {
-                "id": "degen_advisor",
-                "name": "degen_advisor",
-                "display_name": "🦍 Degen Trade Advisor",
-                "description": "Экстремальный анализ для высокорискованных стратегий",
-                "category": "finance",
-                "base_price": 20.0,
-                "rating": 89,
-                "total_executions": 234,
-                "required_access": "premium"
-            }
-        ],
-        "allowed_collections": ALLOWED_COLLECTIONS
-    }
-
 @app.post("/api/v1/wallet/check-nft")
-async def check_wallet_nft(request: NFTCheckRequest):
-    """Проверка NFT в кошельке пользователя"""
+async def check_wallet_nft(request: WalletCheckRequest):
+    """Проверка NFT в кошельке"""
     try:
         result = await check_nft_ownership(request.wallet_address)
         return result
+    except HTTPException:
+        raise
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Ошибка проверки NFT: {str(e)}")
+        logger.error(f"Unexpected error in check_wallet_nft: {e}")
+        raise HTTPException(status_code=500, detail="Внутренняя ошибка сервера")
 
 @app.get("/api/v1/wallet/{wallet_address}/nfts")
 async def get_wallet_nfts(wallet_address: str):
-    """Получить все NFT в кошельке"""
+    """Получение всех NFT кошелька"""
     try:
-        # Получаем все NFT через TON API
-        all_nfts = await ton_client.get_account_nfts(wallet_address)
-        
-        # Получаем адреса разрешенных коллекций
-        allowed_addresses = [collection["address"] for collection in ALLOWED_COLLECTIONS]
-        
-        # Разделяем на разрешенные и остальные
-        allowed_nfts = [nft for nft in all_nfts if nft.get("collection") in allowed_addresses]
-        other_nfts = [nft for nft in all_nfts if nft.get("collection") not in allowed_addresses]
-        
-        return {
-            "wallet_address": wallet_address,
-            "total_nfts": len(all_nfts),
-            "allowed_nfts": allowed_nfts,
-            "other_nfts": other_nfts,
-            "has_access": len(allowed_nfts) > 0,
-            "collections_summary": {
-                collection["address"]: {
-                    "name": collection["name"],
-                    "count": len([nft for nft in allowed_nfts if nft.get("collection") == collection["address"]])
-                } for collection in ALLOWED_COLLECTIONS
+        async with ton_client as client:
+            nfts = await client.get_wallet_nfts(wallet_address)
+            return {
+                "wallet_address": wallet_address,
+                "nfts": nfts,
+                "total_count": len(nfts)
             }
-        }
-        
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Ошибка получения NFT: {str(e)}")
+        logger.error(f"Error getting wallet NFTs: {e}")
+        raise HTTPException(status_code=500, detail="Ошибка получения NFT")
 
-@app.get("/api/v1/user/profile")
-async def get_user_profile(
-    wallet_address: Optional[str] = None,
-    telegram_user_id: Optional[int] = None
-):
-    """Профиль пользователя"""
-    nft_data = {"has_access": False, "access_level": "none", "nfts": [], "total_nfts": 0}
-    
-    if wallet_address:
-        nft_data = await check_nft_ownership(wallet_address)
-    
-    return {
-        "user": {
-            "id": telegram_user_id or 1,
-            "telegram_id": telegram_user_id or 123456789,
-            "username": "test_user",
-            "display_name": "@test_user",
-            "wallet_address": wallet_address,
-            "has_nft_access": nft_data["has_access"],
-            "access_level": nft_data["access_level"],
-            "total_nfts": nft_data["total_nfts"],
-            "agents_used_count": 5
-        },
-        "nfts": nft_data["nfts"]
-    }
+@app.post("/api/v1/telegram/verify")
+async def verify_telegram(request: TelegramInitData):
+    """Проверка данных от Telegram WebApp"""
+    try:
+        verified_data = verify_telegram_data(request.init_data, settings.TELEGRAM_BOT_TOKEN)
+        return {
+            "verified": True,
+            "user_data": verified_data,
+            "development_mode": settings.DEVELOPMENT_MODE
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error verifying Telegram data: {e}")
+        raise HTTPException(status_code=500, detail="Ошибка проверки данных")
 
-@app.post("/api/v1/agents/{agent_id}/execute")
-async def execute_agent(agent_id: str, request: ExecuteAgentRequest):
-    """Выполнение AI агента"""
-    
-    # Проверяем NFT доступ если указан кошелек
-    if request.wallet_address:
-        nft_data = await check_nft_ownership(request.wallet_address)
-        if not nft_data["has_access"]:
-            raise HTTPException(
-                status_code=403, 
-                detail="Для доступа к агентам требуется NFT из разрешенных коллекций"
-            )
-    
-    # Получаем информацию об агенте
-    agents_response = await get_agents()
-    agents = agents_response["agents"]
-    agent = next((a for a in agents if a["id"] == agent_id), None)
-    
-    if not agent:
-        raise HTTPException(status_code=404, detail="Агент не найден")
-    
-    # Проверяем уровень доступа
-    if request.wallet_address:
-        nft_data = await check_nft_ownership(request.wallet_address)
-        user_access = nft_data["access_level"]
-        required_access = agent["required_access"]
+@app.post("/api/v1/agents/execute")
+async def execute_agent(request: AgentExecutionRequest):
+    """Выполнение AI агента (заглушка)"""
+    try:
+        # Проверяем NFT доступ
+        nft_check = await check_nft_ownership(request.wallet_address)
         
-        access_hierarchy = {"none": 0, "basic": 1, "advanced": 2, "premium": 3}
+        if not nft_check["has_access"]:
+            raise HTTPException(status_code=403, detail="Требуется NFT доступ")
         
-        if access_hierarchy[user_access] < access_hierarchy[required_access]:
-            raise HTTPException(
-                status_code=403,
-                detail=f"Для этого агента требуется доступ уровня {required_access}"
-            )
-    
-    # Мок выполнения агента
-    execution_id = f"exec_{agent_id}_{hash(str(request.dict()))}"
-    
-    return {
-        "execution_id": execution_id,
-        "status": "processing",
-        "message": f"Агент {agent['display_name']} запущен для выполнения",
-        "agent": agent,
-        "estimated_completion": "2-5 минут",
-        "transaction_hash": request.transaction_hash
-    }
-
-@app.get("/api/v1/executions/{execution_id}")
-async def get_execution_status(execution_id: str):
-    """Статус выполнения агента"""
-    # Мок данные статуса
-    import random
-    
-    statuses = ["processing", "completed", "failed"]
-    status = random.choice(statuses)
-    
-    result = {
-        "execution_id": execution_id,
-        "status": status,
-        "progress": random.randint(0, 100) if status == "processing" else 100,
-        "created_at": "2024-01-15T10:30:00Z",
-        "updated_at": "2024-01-15T10:35:00Z"
-    }
-    
-    if status == "completed":
-        result["result"] = {
-            "summary": "Анализ завершен успешно",
-            "data": {
-                "recommendations": [
-                    "Рассмотрите диверсификацию портфеля",
-                    "Увеличьте долю стейблкоинов",
-                    "Следите за волатильностью TON"
-                ],
-                "risk_score": random.randint(1, 10),
-                "confidence": random.randint(70, 95)
+        # Симуляция выполнения агента
+        return {
+            "status": "success",
+            "agent": request.agent_name,
+            "wallet": request.wallet_address,
+            "access_level": nft_check["access_level"],
+            "result": {
+                "message": f"Агент {request.agent_name} успешно выполнен",
+                "execution_id": f"exec_{hash(request.wallet_address + request.agent_name)}"
             }
         }
-    elif status == "failed":
-        result["error"] = "Временная недоступность внешних API"
-    
-    return result
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error executing agent: {e}")
+        raise HTTPException(status_code=500, detail="Ошибка выполнения агента")
 
-@app.get("/api/v1/collections")
+@app.get("/api/v1/collections/allowed")
 async def get_allowed_collections():
-    """Список разрешенных NFT коллекций"""
-    return {"collections": ALLOWED_COLLECTIONS}
+    """Получение списка разрешенных NFT коллекций"""
+    return {
+        "collections": [
+            {
+                "address": addr,
+                "name": "NeuroNest Access Collection",
+                "description": "Официальная NFT коллекция для доступа к NeuroNest"
+            }
+            for addr in settings.ALLOWED_NFT_COLLECTIONS
+        ]
+    }
+
+# Обработчик ошибок
+@app.exception_handler(HTTPException)
+async def http_exception_handler(request, exc):
+    """Обработчик HTTP ошибок"""
+    return JSONResponse(
+        status_code=exc.status_code,
+        content={
+            "error": True,
+            "message": exc.detail,
+            "status_code": exc.status_code
+        }
+    )
 
 if __name__ == "__main__":
+    import uvicorn
+    
+    logger.info("🚀 Запуск NeuroNest API сервера...")
+    logger.info(f"🔧 Development mode: {settings.DEVELOPMENT_MODE}")
+    logger.info(f"🔑 TON API key configured: {'✅' if settings.TON_API_KEY else '❌'}")
+    logger.info(f"🔑 TONAPI token configured: {'✅' if settings.TONAPI_TOKEN else '❌'}")
+    logger.info(f"🤖 Telegram bot configured: {'✅' if settings.TELEGRAM_BOT_TOKEN else '❌'}")
+    
     uvicorn.run(
         "main_simple:app",
         host="0.0.0.0",
         port=8000,
-        reload=True
+        reload=True,
+        log_level="info"
     ) 

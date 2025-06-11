@@ -5,7 +5,7 @@
 from sqlalchemy import Column, Integer, String, DateTime, Boolean, BigInteger, Text, ForeignKey, Enum
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import Optional, Dict, Any
 import enum
 

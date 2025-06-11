@@ -2,7 +2,7 @@
 Конфигурация базы данных NeuroNest
 """
 
-from sqlalchemy import create_engine, MetaData
+from sqlalchemy import create_engine, MetaData, text
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker, Session
 from sqlalchemy.pool import StaticPool
@@ -27,65 +27,34 @@ metadata = MetaData(
 # Базовый класс для моделей
 Base = declarative_base(metadata=metadata)
 
-# Конфигурация движка базы данных
-engine_kwargs = {
-    "echo": settings.DEBUG,
-    "pool_pre_ping": True,
-    "pool_recycle": 3600,
-}
-
-# Для PostgreSQL добавляем настройки пула соединений
-if settings.DATABASE_URL.startswith("postgresql"):
-    engine_kwargs.update({
-        "pool_size": settings.DB_POOL_SIZE,
-        "max_overflow": settings.DB_MAX_OVERFLOW,
-        "pool_timeout": settings.DB_POOL_TIMEOUT,
-    })
-
-# Создание движка
-engine = create_engine(settings.DATABASE_URL, **engine_kwargs)
-
-# Фабрика сессий
-SessionLocal = sessionmaker(
-    autocommit=False, 
-    autoflush=False, 
-    bind=engine
+# Создание движка базы данных
+engine = create_engine(
+    settings.DATABASE_URL,
+    pool_pre_ping=True,
+    echo=settings.DEBUG
 )
 
+# Фабрика сессий
+SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
-def get_db() -> Generator[Session, None, None]:
-    """
-    Dependency для получения сессии базы данных в FastAPI
-    """
+
+def get_database():
+    """Dependency для получения сессии базы данных"""
     db = SessionLocal()
     try:
         yield db
-    except Exception as e:
-        logger.error(f"Database session error: {e}")
-        db.rollback()
-        raise
     finally:
         db.close()
 
 
-async def init_db() -> None:
-    """
-    Инициализация базы данных
-    Создает таблицы и выполняет начальную настройку
-    """
+async def init_database() -> None:
+    """Инициализация базы данных"""
     try:
-        logger.info("🔄 Инициализация базы данных...")
-        
-        # Импортируем все модели для их регистрации
-        from app.models.user import User
-        from app.models.agent import Agent, AgentExecution
-        from app.models.transaction import Transaction
-        
-        # Создаем таблицы
+        # Создаем все таблицы
         Base.metadata.create_all(bind=engine)
         logger.info("✅ Таблицы базы данных созданы")
         
-        # Выполняем начальную настройку
+        # Создаем начальные данные
         await create_initial_data()
         
     except Exception as e:
@@ -94,172 +63,125 @@ async def init_db() -> None:
 
 
 async def create_initial_data() -> None:
-    """
-    Создание начальных данных в базе данных
-    """
+    """Создание начальных данных для приложения"""
+    db = None
     try:
         db = SessionLocal()
         
-        # Проверяем, есть ли уже агенты в базе
-        from app.models.agent import Agent, AgentCategory
+        # Проверяем подключение к базе данных
+        db.execute(text("SELECT 1"))
+        logger.info("✅ Подключение к базе данных установлено")
         
-        existing_agents = db.query(Agent).first()
-        if not existing_agents:
-            logger.info("🤖 Создание демо агентов...")
-            await create_demo_agents(db)
+        # Создаем демонстрационных агентов
+        create_demo_agents(db)
         
-        db.commit()
-        db.close()
+        logger.info("✅ Начальные данные успешно созданы")
         
     except Exception as e:
-        logger.error(f"Ошибка создания начальных данных: {e}")
+        logger.error(f"❌ Ошибка создания начальных данных: {e}")
         if db:
             db.rollback()
+    finally:
+        if db:
             db.close()
-        raise
 
 
-async def create_demo_agents(db: Session) -> None:
-    """
-    Создание демонстрационных AI агентов
-    """
+def create_demo_agents(db: Session) -> None:
+    """Создание демонстрационных AI агентов"""
     from app.models.agent import Agent, AgentCategory, AgentStatus
     
     demo_agents = [
         {
-            "name": "crypto_analyzer",
-            "display_name": "💰 Crypto Portfolio Analyzer",
-            "description": "Анализирует криптовалютный портфель и дает рекомендации по торговле",
-            "short_description": "AI помощник для анализа крипто-портфеля и торговых стратегий",
+            "name": "Crypto Portfolio Analyzer",
+            "description": "Анализирует криптовалютный портфель и предоставляет рекомендации по торговле",
             "category": AgentCategory.FINANCE,
-            "tags": ["crypto", "portfolio", "trading", "analysis"],
-            "base_price": 5 * (10 ** 9),  # 5 NOTPUNKS
-            "docker_image": "neuronest/crypto-analyzer",
+            "price_ton": 5.0,
+            "rating": 95,
+            "status": AgentStatus.ACTIVE,
             "input_schema": {
                 "type": "object",
                 "properties": {
-                    "portfolio": {"type": "string", "description": "Портфель в формате JSON"},
-                    "risk_level": {"type": "string", "enum": ["low", "medium", "high"], "default": "medium"}
+                    "wallet_address": {"type": "string", "description": "Адрес кошелька для анализа"},
+                    "timeframe": {"type": "string", "enum": ["1d", "7d", "30d"], "default": "7d"}
                 },
-                "required": ["portfolio"]
+                "required": ["wallet_address"]
             },
-            "required_apis": ["coingecko"],
-            "author": "NeuroNest Team",
-            "is_featured": True
+            "output_schema": {
+                "type": "object",
+                "properties": {
+                    "portfolio_value": {"type": "number"},
+                    "recommendations": {"type": "array", "items": {"type": "string"}},
+                    "risk_score": {"type": "number", "minimum": 0, "maximum": 100}
+                }
+            }
         },
         {
-            "name": "nft_valuator",
-            "display_name": "🎨 NFT Collection Valuator",
-            "description": "Оценивает стоимость NFT коллекций и предсказывает ценовые тренды",
-            "short_description": "AI оценщик NFT с прогнозированием цен",
+            "name": "NFT Collection Valuator",
+            "description": "Оценивает NFT коллекции и прогнозирует ценовые тренды",
             "category": AgentCategory.FINANCE,
-            "tags": ["nft", "valuation", "trends", "opensea"],
-            "base_price": 3 * (10 ** 9),  # 3 NOTPUNKS
-            "docker_image": "neuronest/nft-valuator",
+            "price_ton": 3.0,
+            "rating": 88,
+            "status": AgentStatus.ACTIVE,
             "input_schema": {
                 "type": "object",
                 "properties": {
                     "collection_address": {"type": "string", "description": "Адрес NFT коллекции"},
-                    "blockchain": {"type": "string", "enum": ["ethereum", "polygon", "ton"], "default": "ethereum"}
+                    "analysis_depth": {"type": "string", "enum": ["basic", "advanced"], "default": "basic"}
                 },
                 "required": ["collection_address"]
             },
-            "required_apis": ["opensea", "alchemy"],
-            "author": "NeuroNest Team",
-            "is_featured": True
+            "output_schema": {
+                "type": "object",
+                "properties": {
+                    "floor_price": {"type": "number"},
+                    "trend_direction": {"type": "string", "enum": ["up", "down", "stable"]},
+                    "confidence": {"type": "number", "minimum": 0, "maximum": 1}
+                }
+            }
         },
         {
-            "name": "code_reviewer",
-            "display_name": "👨‍💻 AI Code Reviewer",
-            "description": "Проводит детальный анализ кода и предлагает улучшения",
-            "short_description": "Автоматический ревьювер кода с рекомендациями",
-            "category": AgentCategory.PRODUCTIVITY,
-            "tags": ["code", "review", "analysis", "quality"],
-            "base_price": 2 * (10 ** 9),  # 2 NOTPUNKS
-            "docker_image": "neuronest/code-reviewer",
+            "name": "Smart Contract Auditor",
+            "description": "Автоматический анализ и аудит смарт-контрактов на уязвимости",
+            "category": AgentCategory.DEVELOPMENT,
+            "price_ton": 8.0,
+            "rating": 92,
+            "status": AgentStatus.ACTIVE,
             "input_schema": {
                 "type": "object",
                 "properties": {
-                    "code": {"type": "string", "description": "Код для анализа"},
-                    "language": {"type": "string", "description": "Язык программирования"},
-                    "focus": {"type": "string", "enum": ["security", "performance", "style", "all"], "default": "all"}
+                    "contract_code": {"type": "string", "description": "Код смарт-контракта"},
+                    "audit_level": {"type": "string", "enum": ["basic", "advanced", "comprehensive"], "default": "basic"}
                 },
-                "required": ["code", "language"]
+                "required": ["contract_code"]
             },
-            "required_apis": ["openai"],
-            "author": "NeuroNest Team"
-        },
-        {
-            "name": "market_researcher",
-            "display_name": "📊 Market Research Assistant",
-            "description": "Проводит маркетинговые исследования и анализ конкурентов",
-            "short_description": "AI ассистент для маркетинговых исследований",
-            "category": AgentCategory.BUSINESS,
-            "tags": ["market", "research", "competitors", "analysis"],
-            "base_price": 7 * (10 ** 9),  # 7 NOTPUNKS
-            "docker_image": "neuronest/market-researcher",
-            "input_schema": {
+            "output_schema": {
                 "type": "object",
                 "properties": {
-                    "industry": {"type": "string", "description": "Отрасль для исследования"},
-                    "region": {"type": "string", "description": "Географический регион"},
-                    "depth": {"type": "string", "enum": ["basic", "detailed", "comprehensive"], "default": "detailed"}
-                },
-                "required": ["industry"]
-            },
-            "required_apis": ["google", "serpapi"],
-            "author": "NeuroNest Team"
-        },
-        {
-            "name": "health_advisor",
-            "display_name": "🏥 Personal Health Advisor",
-            "description": "Персональный консультант по здоровью на основе симптомов и истории",
-            "short_description": "AI консультант по вопросам здоровья",
-            "category": AgentCategory.HEALTH,
-            "tags": ["health", "symptoms", "advice", "wellness"],
-            "base_price": 4 * (10 ** 9),  # 4 NOTPUNKS
-            "docker_image": "neuronest/health-advisor",
-            "input_schema": {
-                "type": "object",
-                "properties": {
-                    "symptoms": {"type": "string", "description": "Описание симптомов"},
-                    "age": {"type": "integer", "minimum": 1, "maximum": 120},
-                    "gender": {"type": "string", "enum": ["male", "female", "other"]},
-                    "medical_history": {"type": "string", "description": "Медицинская история"}
-                },
-                "required": ["symptoms"]
-            },
-            "required_apis": ["openai"],
-            "author": "NeuroNest Team"
-        },
-        {
-            "name": "game_strategy",
-            "display_name": "🎮 Game Strategy Optimizer",
-            "description": "Оптимизирует игровые стратегии для различных жанров игр",
-            "short_description": "AI оптимизатор игровых стратегий",
-            "category": AgentCategory.GAMING,
-            "tags": ["gaming", "strategy", "optimization", "tactics"],
-            "base_price": 3 * (10 ** 9),  # 3 NOTPUNKS
-            "docker_image": "neuronest/game-strategy",
-            "input_schema": {
-                "type": "object",
-                "properties": {
-                    "game_name": {"type": "string", "description": "Название игры"},
-                    "game_type": {"type": "string", "enum": ["moba", "fps", "rts", "rpg", "strategy"]},
-                    "current_level": {"type": "string", "description": "Текущий уровень игрока"},
-                    "goals": {"type": "string", "description": "Игровые цели"}
-                },
-                "required": ["game_name", "game_type"]
-            },
-            "required_apis": ["openai"],
-            "author": "NeuroNest Team"
+                    "vulnerabilities": {"type": "array", "items": {"type": "object"}},
+                    "security_score": {"type": "number", "minimum": 0, "maximum": 100},
+                    "recommendations": {"type": "array", "items": {"type": "string"}}
+                }
+            }
         }
     ]
     
+    # Проверяем, существуют ли уже агенты
+    existing_count = db.query(Agent).count()
+    if existing_count > 0:
+        logger.info(f"Демо-агенты уже существуют ({existing_count} агентов)")
+        return
+        
+    # Создаем новых агентов
     for agent_data in demo_agents:
-        agent = Agent(**agent_data)
-        db.add(agent)
-        logger.info(f"✅ Создан агент: {agent.display_name}")
+        try:
+            agent = Agent(**agent_data)
+            db.add(agent)
+            logger.info(f"Создан агент: {agent.name}")
+        except Exception as e:
+            logger.error(f"Ошибка создания агента {agent_data['name']}: {e}")
+    
+    db.commit()
+    logger.info(f"Создано {len(demo_agents)} демо-агентов")
 
 
 def create_test_db() -> None:
