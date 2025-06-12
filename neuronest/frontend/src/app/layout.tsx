@@ -27,6 +27,42 @@ export default function RootLayout({
     <html lang="ru">
       <head>
         <script src="https://telegram.org/js/telegram-web-app.js" defer />
+        <script dangerouslySetInnerHTML={{
+          __html: `
+            if (typeof window !== 'undefined' && !window.Telegram) {
+              window.Telegram = {
+                WebApp: {
+                  ready: () => {},
+                  expand: () => {},
+                  close: () => {},
+                  initData: '',
+                  initDataUnsafe: {},
+                  version: '6.0',
+                  platform: 'unknown',
+                  colorScheme: 'dark',
+                  themeParams: {},
+                  isExpanded: false,
+                  viewportHeight: window.innerHeight,
+                  viewportStableHeight: window.innerHeight,
+                  MainButton: {
+                    show: () => {},
+                    hide: () => {},
+                    setText: () => {}
+                  },
+                  BackButton: {
+                    show: () => {},
+                    hide: () => {}
+                  },
+                  HapticFeedback: {
+                    impactOccurred: () => {},
+                    notificationOccurred: () => {},
+                    selectionChanged: () => {}
+                  }
+                }
+              };
+            }
+          `
+        }} />
       </head>
       <body className={inter.className}>
         <ErrorBoundary>

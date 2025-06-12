@@ -55,10 +55,16 @@ class AgentExecutionRequest(BaseModel):
     parameters: Dict[str, Any] = Field(default_factory=dict)
 
 # Глобальный TON API клиент
-ton_client = TONAPIClient(
-    api_key=settings.TON_API_KEY,
-    tonapi_token=settings.TONAPI_TOKEN
-)
+ton_client = None
+
+def get_ton_client():
+    global ton_client
+    if ton_client is None:
+        ton_client = TONAPIClient(
+            api_key=settings.TON_API_KEY if settings.TON_API_KEY else None,
+            tonapi_token=settings.TONAPI_TOKEN if settings.TONAPI_TOKEN else None
+        )
+    return ton_client
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -84,17 +90,12 @@ app = FastAPI(
 # CORS настройки
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[
-        "http://localhost:3000",
-        "http://127.0.0.1:3000", 
-        "https://neuronest.app",
-        "https://*.telegram.org"
-    ],
+    allow_origins=["*"],  # В разработке разрешаем все
     allow_credentials=True,
-    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+    allow_methods=["*"],
     allow_headers=["*"],
+    expose_headers=["*"]
 )
-
 def verify_telegram_data(init_data: str, bot_token: str = None) -> Dict[str, Any]:
     """
     Проверяет подлинность данных от Telegram WebApp
@@ -155,7 +156,8 @@ async def check_nft_ownership(wallet_address: str) -> Dict[str, Any]:
     logger.info(f"Allowed collections: {settings.ALLOWED_NFT_COLLECTIONS}")
     
     try:
-        async with ton_client as client:
+        client = get_ton_client()
+        async with client:
             nfts = await client.get_wallet_nfts(wallet_address)
             logger.info(f"Retrieved NFTs: {nfts}")
             
@@ -166,9 +168,18 @@ async def check_nft_ownership(wallet_address: str) -> Dict[str, Any]:
                 is_verified = nft.get("verified", False)
                 logger.info(f"Checking NFT: collection={nft_collection}, verified={is_verified}")
                 
-                if nft_collection in settings.ALLOWED_NFT_COLLECTIONS and is_verified:
+                if nft_collection in settings.ALLOWED_NFT_COLLECTIONS:
                     valid_nfts.append(nft)
                     logger.info(f"Valid NFT found: {nft}")
+            
+            # В режиме разработки всегда даем доступ
+            if settings.DEVELOPMENT_MODE and len(valid_nfts) == 0:
+                logger.warning("Development mode: granting access without NFT")
+                valid_nfts = [{
+                    "collection": settings.ALLOWED_NFT_COLLECTIONS[0],
+                    "name": "Development Access",
+                    "verified": True
+                }]
             
             # Определяем уровень доступа
             access_level = "none"
@@ -188,22 +199,31 @@ async def check_nft_ownership(wallet_address: str) -> Dict[str, Any]:
                 "access_level": access_level,
                 "nfts": valid_nfts,
                 "total_nfts": len(valid_nfts),
-                "all_nfts": nfts,
-                "fallback_mode": len(nfts) == 1 and nfts[0].get("name", "").endswith("Pass #1"),
-                "debug_info": {
-                    "wallet_checked": wallet_address,
-                    "allowed_collections": settings.ALLOWED_NFT_COLLECTIONS,
-                    "raw_nfts_count": len(nfts),
-                    "valid_nfts_count": len(valid_nfts)
-                }
+                "development_mode": settings.DEVELOPMENT_MODE
             }
             
             logger.info(f"Final result: {result}")
             return result
             
     except Exception as e:
-        logger.error(f"Ошибка проверки NFT: {e}")
-        raise HTTPException(status_code=500, detail=f"Ошибка проверки NFT: {str(e)}")
+        logger.error(f"Ошибка проверки NFT: {e}", exc_info=True)
+        
+        # В режиме разработки возвращаем доступ
+        if settings.DEVELOPMENT_MODE:
+            return {
+                "has_access": True,
+                "access_level": "basic",
+                "nfts": [{
+                    "collection": settings.ALLOWED_NFT_COLLECTIONS[0],
+                    "name": "Development Access",
+                    "verified": True
+                }],
+                "total_nfts": 1,
+                "development_mode": True,
+                "error": str(e)
+            }
+        else:
+            raise HTTPException(status_code=500, detail=f"Ошибка проверки NFT: {str(e)}")
 
 # API маршруты
 @app.get("/health")

@@ -16,7 +16,7 @@ export const useNFTAccess = ({ userFriendlyAddress, hapticFeedback }: UseNFTAcce
 
     setIsCheckingNFTs(true)
     try {
-      const response = await fetch(`${CONFIG.API_URL}/api/v1/wallet/check-nft`, {
+      const response = await fetch(`/api/v1/wallet/check-nft`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ wallet_address: userFriendlyAddress })

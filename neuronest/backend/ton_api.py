@@ -41,6 +41,14 @@ class TONAPIClient:
         Пробует несколько API источников для получения данных
         """
         try:
+            # Логируем входные данные
+            logger.info(f"Checking NFTs for wallet: {wallet_address}")
+            
+            # Если нет API ключей, сразу возвращаем мок данные
+            if not self.tonapi_token and not self.api_key:
+                logger.warning("No API keys configured, using mock data")
+                return await self._get_mock_nfts(wallet_address)
+            
             # Пробуем TONAPI.io
             if self.tonapi_token:
                 nfts = await self._get_nfts_from_tonapi(wallet_address)
@@ -49,17 +57,18 @@ class TONAPIClient:
                     return nfts
             
             # Fallback к TONCenter
-            nfts = await self._get_nfts_from_toncenter(wallet_address)
-            if nfts:
-                logger.info(f"Получено {len(nfts)} NFT с TONCenter")
-                return nfts
+            if self.api_key:
+                nfts = await self._get_nfts_from_toncenter(wallet_address)
+                if nfts:
+                    logger.info(f"Получено {len(nfts)} NFT с TONCenter")
+                    return nfts
             
             # Если все API недоступны, используем мок данные
             logger.warning("Все TON API недоступны, используем мок данные")
             return await self._get_mock_nfts(wallet_address)
             
         except Exception as e:
-            logger.error(f"Ошибка получения NFT: {e}")
+            logger.error(f"Ошибка получения NFT: {e}", exc_info=True)
             return await self._get_mock_nfts(wallet_address)
     
     async def _get_nfts_from_tonapi(self, wallet_address: str) -> List[Dict[str, Any]]:
