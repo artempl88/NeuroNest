@@ -1,5 +1,6 @@
 export const CONFIG = {
-  API_URL: process.env.NEXT_PUBLIC_API_URL || '',
+  // Используем относительный путь для API
+  API_URL: '',
   PAYMENT_ADDRESS: process.env.NEXT_PUBLIC_PAYMENT_ADDRESS || 'EQBfbkxNqgzQQm_GqL4zQGLm2N6_r-5rG_3k4l__NF8qf',
   COLLECTION_ADDRESS: 'EQCGbQyAJxxMsYQWLCklkXQq4fkIBK3kz3GA1TkFJyUR9nTH',
   
@@ -17,4 +18,4 @@ export const CONFIG = {
     ADVANCED_MIN: 3,
     PREMIUM_MIN: 10
   }
-} 
+}
